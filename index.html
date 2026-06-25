@@ -289,7 +289,7 @@
     function buildMonthPicker() {
       const now = new Date();
       const picker = document.getElementById("month-picker");
-      for (let i = 0; i < 4; i++) {
+      for (let i = 1; i <= 4; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
         const label = months[d.getMonth()] + " " + d.getFullYear();
         const btn = document.createElement("button");
