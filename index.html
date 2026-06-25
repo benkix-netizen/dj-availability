@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DJ Availability</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f3;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .form-wrap {
+      max-width: 620px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #1a1a1a;
+    }
+
+    h1 i { color: #666; font-size: 20px; }
+
+    .subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 1.5rem;
+    }
+
+    .field-row { margin-bottom: 1.25rem; }
+
+    .field-row label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .field-row input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+
+    .field-row input:focus { border-color: #888; }
+
+    .month-select {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .month-chip {
+      padding: 6px 16px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 999px;
+      cursor: pointer;
+      background: transparent;
+      color: #555;
+      font-family: inherit;
+      transition: all 0.12s;
+    }
+
+    .month-chip.active {
+      background: #1a1a1a;
+      border-color: #1a1a1a;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .day-card {
+      border: 1px solid #e8e8e8;
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .day-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .day-title i { color: #888; font-size: 17px; }
+
+    .set-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-top: 1px solid #f0f0f0;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .set-label {
+      font-size: 14px;
+      color: #555;
+    }
+
+    .toggle-group { display: flex; gap: 6px; }
+
+    .tog {
+      padding: 5px 13px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      background: transparent;
+      color: #666;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.12s;
+    }
+
+    .tog:hover { background: #f5f5f5; }
+    .tog.yes.active { background: #eaf3de; color: #27500a; border-color: #97c459; }
+    .tog.maybe.active { background: #faeeda; color: #633806; border-color: #ef9f27; }
+    .tog.no.active { background: #fcebeb; color: #791f1f; border-color: #f09595; }
+
+    .submit-btn {
+      width: 100%;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.12s;
+    }
+
+    .submit-btn:hover { background: #333; }
+    .submit-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    .error {
+      font-size: 12px;
+      color: #c0392b;
+      margin-top: 5px;
+      display: none;
+    }
+    .error.show { display: block; }
+
+    .sending {
+      font-size: 14px;
+      color: #888;
+      text-align: center;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .err-banner {
+      font-size: 13px;
+      color: #791f1f;
+      background: #fcebeb;
+      border: 1px solid #f09595;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .confirm {
+      display: none;
+      text-align: center;
+      padding: 2.5rem 1rem;
+    }
+
+    .confirm .check-icon {
+      font-size: 48px;
+      color: #3b6d11;
+      margin-bottom: 1rem;
+    }
+
+    .confirm h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .confirm p {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    .reset-btn {
+      padding: 9px 22px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: transparent;
+      cursor: pointer;
+      color: #555;
+      font-family: inherit;
+    }
+
+    .reset-btn:hover { background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <div class="form-wrap">
+    <div id="form-view">
+      <h1><i class="ti ti-music"></i> DJ Availability</h1>
+      <p class="subtitle">Fill in your availability for all Thursday, Friday, and Saturday sets.</p>
+
+      <div class="field-row">
+        <label>DJ name</label>
+        <input type="text" id="dj-name" placeholder="Your name" />
+        <div class="error" id="name-err">Please enter your name.</div>
+      </div>
+
+      <div class="field-row">
+        <label>Month</label>
+        <div class="month-select" id="month-picker"></div>
+        <div class="error" id="month-err">Please select a month.</div>
+      </div>
+
+      <div id="days-container"></div>
+
+      <button class="submit-btn" id="submit-btn" onclick="submitForm()">
+        <i class="ti ti-send"></i> Submit availability
+      </button>
+      <div class="sending" id="sending-msg"><i class="ti ti-loader"></i> Sending to your sheet…</div>
+      <div class="err-banner" id="err-banner">Something went wrong. Please try again.</div>
+    </div>
+
+    <div class="confirm" id="confirm-view">
+      <i class="ti ti-circle-check check-icon"></i>
+      <h2>Availability submitted!</h2>
+      <p id="confirm-text"></p>
+      <button class="reset-btn" onclick="resetForm()">Submit for another month</button>
+    </div>
+  </div>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPEaIosP4j_ckgE3Nr9Lnm71YhpTEGiaTbT-Qs1KDPITXkS9XeHVl0OMRoFVyPZOW-/exec";
+
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+    const setsByDay = {
+      4: { name: "Thursday", sets: ["9pm – 11pm", "11pm – 1am"] },
+      5: { name: "Friday",   sets: ["8:30pm – 10pm", "10pm – 12am", "12am – 2am"] },
+      6: { name: "Saturday", sets: ["8:30pm – 10pm", "10pm – 12am", "12am – 2am"] }
+    };
+
+    let selectedMonth = null;
+    let availability = {};
+    let nightMeta = {};
+
+    function buildMonthPicker() {
+      const now = new Date();
+      const picker = document.getElementById("month-picker");
+      for (let i = 0; i < 4; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const label = months[d.getMonth()] + " " + d.getFullYear();
+        const btn = document.createElement("button");
+        btn.className = "month-chip";
+        btn.textContent = label;
+        btn.onclick = () => selectMonth(btn, label);
+        picker.appendChild(btn);
+      }
+    }
+
+    function selectMonth(btn, label) {
+      document.querySelectorAll(".month-chip").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectedMonth = label;
+      document.getElementById("month-err").classList.remove("show");
+      buildDays(label);
+    }
+
+    function buildDays(monthLabel) {
+      const container = document.getElementById("days-container");
+      container.innerHTML = "";
+      availability = {};
+      nightMeta = {};
+
+      const [monthName, year] = monthLabel.split(" ");
+      const monthIdx = months.indexOf(monthName);
+      const d = new Date(parseInt(year), monthIdx, 1);
+
+      const allNights = [];
+      while (d.getMonth() === monthIdx) {
+        const dow = d.getDay();
+        if (setsByDay[dow]) allNights.push({ date: new Date(d), dow });
+        d.setDate(d.getDate() + 1);
+      }
+
+      allNights.forEach(({ date, dow }) => {
+        const dayDef = setsByDay[dow];
+        const dateLabel = date.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "short" });
+        const dateShort = date.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+
+        const card = document.createElement("div");
+        card.className = "day-card";
+        card.innerHTML = `<div class="day-title"><i class="ti ti-calendar-event"></i>${dateLabel}</div>`;
+
+        dayDef.sets.forEach((setTime, si) => {
+          const key = `${dow}-${date.getDate()}-${si}`;
+          availability[key] = null;
+          nightMeta[key] = { date: dateShort, day: dayDef.name, setTime };
+
+          const row = document.createElement("div");
+          row.className = "set-row";
+          row.innerHTML = `
+            <span class="set-label">${setTime}</span>
+            <div class="toggle-group">
+              <button class="tog yes" onclick="setAvail(this,'${key}','yes')"><i class="ti ti-check"></i> Yes</button>
+              <button class="tog maybe" onclick="setAvail(this,'${key}','maybe')">Maybe</button>
+              <button class="tog no" onclick="setAvail(this,'${key}','no')"><i class="ti ti-x"></i> No</button>
+            </div>`;
+          card.appendChild(row);
+        });
+
+        container.appendChild(card);
+      });
+    }
+
+    function setAvail(btn, key, val) {
+      btn.closest(".toggle-group").querySelectorAll(".tog").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      availability[key] = val;
+    }
+
+    async function submitForm() {
+      const name = document.getElementById("dj-name").value.trim();
+      let valid = true;
+
+      if (!name) { document.getElementById("name-err").classList.add("show"); valid = false; }
+      else { document.getElementById("name-err").classList.remove("show"); }
+
+      if (!selectedMonth) { document.getElementById("month-err").classList.add("show"); valid = false; }
+      else { document.getElementById("month-err").classList.remove("show"); }
+
+      if (!valid) return;
+
+      const slots = Object.entries(availability).map(([key, avail]) => ({
+        ...nightMeta[key],
+        availability: avail || "No response"
+      }));
+
+      const submitBtn = document.getElementById("submit-btn");
+      const sendingMsg = document.getElementById("sending-msg");
+      const errBanner = document.getElementById("err-banner");
+
+      submitBtn.disabled = true;
+      sendingMsg.style.display = "block";
+      errBanner.style.display = "none";
+
+      try {
+        await fetch(SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ djName: name, month: selectedMonth, slots })
+        });
+
+        const yes = slots.filter(s => s.availability === "yes").length;
+        const maybe = slots.filter(s => s.availability === "maybe").length;
+
+        document.getElementById("confirm-text").textContent =
+          `Thanks, ${name}! Your availability for ${selectedMonth} has been saved — ${yes} available, ${maybe} maybe, out of ${slots.length} sets.`;
+        document.getElementById("form-view").style.display = "none";
+        document.getElementById("confirm-view").style.display = "block";
+
+      } catch (err) {
+        errBanner.style.display = "block";
+        submitBtn.disabled = false;
+        sendingMsg.style.display = "none";
+      }
+    }
+
+    function resetForm() {
+      document.getElementById("dj-name").value = "";
+      document.getElementById("days-container").innerHTML = "";
+      document.querySelectorAll(".month-chip").forEach(b => b.classList.remove("active"));
+      document.getElementById("submit-btn").disabled = false;
+      document.getElementById("sending-msg").style.display = "none";
+      document.getElementById("form-view").style.display = "block";
+      document.getElementById("confirm-view").style.display = "none";
+      selectedMonth = null;
+      availability = {};
+      nightMeta = {};
+    }
+
+    buildMonthPicker();
+  </script>
+</body>
+</html>
