@@ -91,6 +91,8 @@
     .tog.yes.active  { background: #1a4a2e; color: #7fd4a0; border-color: #3a9a60; }
     .tog.maybe.active { background: #3a3000; color: #FFD700; border-color: #8B6914; }
     .tog.no.active   { background: #3a0000; color: #ff8080; border-color: #8B2020; }
+    .set-row.unanswered { background: rgba(255, 128, 128, 0.08); border-radius: 6px; padding-left: 8px; padding-right: 8px; }
+    .set-row.unanswered .set-label { color: #ff8080; }
     .submit-btn {
       width: 100%; padding: 13px; font-size: 15px; font-weight: 700;
       background: #1a4a2e; color: #FFD700; border: 2px solid #FFD700;
@@ -154,6 +156,7 @@
         <div class="error" id="month-err">Please select a month.</div>
       </div>
       <div id="days-container"></div>
+      <div class="error" id="slots-err">Please answer every set (Yes / Maybe / No) before submitting.</div>
       <button class="submit-btn" id="submit-btn" onclick="submitForm()">
         <i class="ti ti-send"></i> Submit Availability
       </button>
@@ -198,6 +201,7 @@
       btn.classList.add("active");
       selectedMonth = label;
       document.getElementById("month-err").classList.remove("show");
+      document.getElementById("slots-err").classList.remove("show");
       buildDays(label);
     }
 
@@ -227,6 +231,7 @@
           nightMeta[key] = { date: dateShort, day: dayDef.name, setTime };
           const row = document.createElement("div");
           row.className = "set-row";
+          row.dataset.key = key;
           row.innerHTML = `
             <span class="set-label">${setTime}</span>
             <div class="toggle-group">
@@ -244,6 +249,8 @@
       btn.closest(".toggle-group").querySelectorAll(".tog").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       availability[key] = val;
+      const row = document.querySelector(`.set-row[data-key="${key}"]`);
+      if (row) row.classList.remove("unanswered");
     }
 
     async function submitForm() {
@@ -253,6 +260,31 @@
       else { document.getElementById("name-err").classList.remove("show"); }
       if (!selectedMonth) { document.getElementById("month-err").classList.add("show"); valid = false; }
       else { document.getElementById("month-err").classList.remove("show"); }
+
+      const slotsErr = document.getElementById("slots-err");
+      if (selectedMonth) {
+        const unansweredKeys = Object.entries(availability)
+          .filter(([key, avail]) => !avail)
+          .map(([key]) => key);
+
+        document.querySelectorAll(".set-row").forEach(row => row.classList.remove("unanswered"));
+
+        if (unansweredKeys.length > 0) {
+          valid = false;
+          slotsErr.classList.add("show");
+          unansweredKeys.forEach(key => {
+            const row = document.querySelector(`.set-row[data-key="${key}"]`);
+            if (row) row.classList.add("unanswered");
+          });
+          const firstRow = document.querySelector(`.set-row[data-key="${unansweredKeys[0]}"]`);
+          if (firstRow) firstRow.scrollIntoView({ behavior: "smooth", block: "center" });
+        } else {
+          slotsErr.classList.remove("show");
+        }
+      } else {
+        slotsErr.classList.remove("show");
+      }
+
       if (!valid) return;
       const slots = Object.entries(availability).map(([key, avail]) => ({
         ...nightMeta[key], availability: avail || "No response"
@@ -290,6 +322,9 @@
       document.getElementById("sending-msg").style.display = "none";
       document.getElementById("form-view").style.display = "block";
       document.getElementById("confirm-view").style.display = "none";
+      document.getElementById("name-err").classList.remove("show");
+      document.getElementById("month-err").classList.remove("show");
+      document.getElementById("slots-err").classList.remove("show");
       selectedMonth = null; availability = {}; nightMeta = {};
     }
 
