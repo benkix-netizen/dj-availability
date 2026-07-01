@@ -49,13 +49,14 @@
       color: #FFD700; margin-bottom: 6px;
       letter-spacing: 0.8px; text-transform: uppercase;
     }
-    .field-row input {
+    .field-row input, .field-row select {
       width: 100%; padding: 10px 12px; font-size: 15px;
       border: 1px solid #2a5a3a; border-radius: 8px;
       background: #143d25; color: #fff; font-family: inherit; outline: none;
     }
     .field-row input::placeholder { color: #4a7a5a; }
-    .field-row input:focus { border-color: #FFD700; }
+    .field-row input:focus, .field-row select:focus { border-color: #FFD700; }
+    .field-row select { appearance: none; -webkit-appearance: none; }
     .month-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; }
     .month-chip {
       padding: 6px 16px; font-size: 13px; border: 1px solid #2a5a3a;
@@ -132,7 +133,19 @@
     <div id="form-view">
       <div class="field-row">
         <label>DJ Name</label>
-        <input type="text" id="dj-name" placeholder="Your name" />
+        <select id="dj-name">
+          <option value="" selected disabled>Select your name</option>
+          <option value="Bunni">Bunni</option>
+          <option value="Nam">Nam</option>
+          <option value="K-Otic">K-Otic</option>
+          <option value="Mu">Mu</option>
+          <option value="Nova">Nova</option>
+          <option value="Slender">Slender</option>
+          <option value="Lance">Lance</option>
+          <option value="Buttons">Buttons</option>
+          <option value="Claz">Claz</option>
+          <option value="Sef">Sef</option>
+        </select>
         <div class="error" id="name-err">Please enter your name.</div>
       </div>
       <div class="field-row">
