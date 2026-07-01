@@ -182,6 +182,15 @@
     };
     let selectedMonth = null, availability = {}, nightMeta = {};
 
+    // Roster weeks run Thursday -> Saturday. Returns the first Thursday
+    // on/after the given year/month/day (month rollover, e.g. month 12,
+    // is handled automatically by the Date constructor).
+    function firstThursdayOnOrAfter(year, monthIdx, day) {
+      const d = new Date(year, monthIdx, day);
+      while (d.getDay() !== 4) d.setDate(d.getDate() + 1);
+      return d;
+    }
+
     function buildMonthPicker() {
       const now = new Date();
       const picker = document.getElementById("month-picker");
@@ -211,9 +220,20 @@
       availability = {}; nightMeta = {};
       const [monthName, year] = monthLabel.split(" ");
       const monthIdx = months.indexOf(monthName);
-      const d = new Date(parseInt(year), monthIdx, 1);
+      const yearNum = parseInt(year);
+
+      // A month's roster starts on the first Thursday on/after the 1st,
+      // and runs through to (but not including) the first Thursday of the
+      // following month. That way a trailing Friday/Saturday that falls
+      // before next month's first Thursday stays with THIS month, and a
+      // leading Friday/Saturday that falls before THIS month's first
+      // Thursday correctly stayed with the PREVIOUS month instead.
+      const start = firstThursdayOnOrAfter(yearNum, monthIdx, 1);
+      const end = firstThursdayOnOrAfter(yearNum, monthIdx + 1, 1);
+
+      const d = new Date(start);
       const allNights = [];
-      while (d.getMonth() === monthIdx) {
+      while (d < end) {
         const dow = d.getDay();
         if (setsByDay[dow]) allNights.push({ date: new Date(d), dow });
         d.setDate(d.getDate() + 1);
