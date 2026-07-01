@@ -43,6 +43,11 @@
       gap: 8px;
     }
     .header p { font-size: 13px; color: #a8d4b8; margin: 0; }
+    .quote-line {
+      font-size: 13px; font-style: italic; color: #FFD700;
+      text-align: center; margin: 0 0 1.25rem; opacity: 0.9;
+      padding: 0 0.5rem;
+    }
     .field-row { margin-bottom: 1.25rem; }
     .field-row label {
       display: block; font-size: 12px; font-weight: 600;
@@ -133,6 +138,7 @@
     </div>
 
     <div id="form-view">
+      <p class="quote-line" id="monthly-quote"></p>
       <div class="field-row">
         <label>DJ Name</label>
         <select id="dj-name">
@@ -194,14 +200,24 @@
     function buildMonthPicker() {
       const now = new Date();
       const picker = document.getElementById("month-picker");
-      for (let i = 1; i <= 4; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-        const label = months[d.getMonth()] + " " + d.getFullYear();
+
+      const addMonthChip = (label) => {
         const btn = document.createElement("button");
         btn.className = "month-chip";
         btn.textContent = label;
         btn.onclick = () => selectMonth(btn, label);
         picker.appendChild(btn);
+      };
+
+      // Keep the current month selectable for the first week (handy for
+      // late/corrected submissions), then drop it once we're further in.
+      if (now.getDate() <= 7) {
+        addMonthChip(months[now.getMonth()] + " " + now.getFullYear());
+      }
+
+      for (let i = 1; i <= 4; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        addMonthChip(months[d.getMonth()] + " " + d.getFullYear());
       }
     }
 
@@ -348,6 +364,30 @@
       selectedMonth = null; availability = {}; nightMeta = {};
     }
 
+    // A different funny line for each calendar month (index 0 = January)
+    // A different DJ-themed line for each calendar month — written for
+    // Melbourne's Southern Hemisphere seasons (July = winter, not summer).
+    const monthlyQuotes = [
+      "New year, same rule: no awkward transitions after midnight.",
+      "35°C outside, decks even hotter. Bring it.",
+      "Four seasons in one Melbourne day, one BPM that matters all night.",
+      "Footy's back — don't let the crowd out-dance your drop.",
+      "Jumper weather's here. Warm up the room, not just yourself.",
+      "Winter's landed. The only thing that should be freezing is the bassline.",
+      "Cold enough for three coats, hot enough for one killer set.",
+      "Finals fever's building — bring finals-level energy to the booth.",
+      "Grand Final month: everyone's a critic, especially of your transitions.",
+      "Spring racing season — fashion on the field, bangers on the floor.",
+      "The race that stops a nation shouldn't stop your set.",
+      "Summer's back and so is the queue out the door. Earn it."
+    ];
+
+    function showMonthlyQuote() {
+      const el = document.getElementById("monthly-quote");
+      if (el) el.textContent = monthlyQuotes[new Date().getMonth()];
+    }
+
+    showMonthlyQuote();
     buildMonthPicker();
   </script>
 </body>
