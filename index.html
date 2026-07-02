@@ -43,6 +43,12 @@
       gap: 8px;
     }
     .header p { font-size: 13px; color: #a8d4b8; margin: 0; }
+    .roster-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 10px; font-size: 12px; font-weight: 600;
+      color: #FFD700; text-decoration: none; letter-spacing: 0.3px;
+    }
+    .roster-link:hover { text-decoration: underline; }
     .quote-line {
       font-size: 13px; font-style: italic; color: #FFD700;
       text-align: center; margin: 0 0 1.25rem; opacity: 0.9;
@@ -135,6 +141,7 @@
     <div class="header">
       <h1><i class="ti ti-music"></i> LKF Bar — DJ Availability</h1>
       <p>Fill in your availability for all Thursday, Friday, and Saturday sets.</p>
+      <a class="roster-link" href="roster.html"><i class="ti ti-calendar-event"></i> View Roster</a>
     </div>
 
     <div id="form-view">
@@ -155,6 +162,11 @@
           <option value="Sef">Sef</option>
         </select>
         <div class="error" id="name-err">Please enter your name.</div>
+      </div>
+      <div class="field-row">
+        <label>Email</label>
+        <input type="email" id="dj-email" placeholder="you@example.com" autocomplete="email" />
+        <div class="error" id="email-err">Please enter a valid email.</div>
       </div>
       <div class="field-row">
         <label>Month</label>
@@ -291,9 +303,13 @@
 
     async function submitForm() {
       const name = document.getElementById("dj-name").value.trim();
+      const email = document.getElementById("dj-email").value.trim();
       let valid = true;
       if (!name) { document.getElementById("name-err").classList.add("show"); valid = false; }
       else { document.getElementById("name-err").classList.remove("show"); }
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if (!emailOk) { document.getElementById("email-err").classList.add("show"); valid = false; }
+      else { document.getElementById("email-err").classList.remove("show"); }
       if (!selectedMonth) { document.getElementById("month-err").classList.add("show"); valid = false; }
       else { document.getElementById("month-err").classList.remove("show"); }
 
@@ -335,7 +351,7 @@
         await fetch(SCRIPT_URL, {
           method: "POST", mode: "no-cors",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ djName: name, month: selectedMonth, slots })
+          body: JSON.stringify({ djName: name, email, month: selectedMonth, slots })
         });
         const yes = slots.filter(s => s.availability === "yes").length;
         const maybe = slots.filter(s => s.availability === "maybe").length;
@@ -352,6 +368,7 @@
 
     function resetForm() {
       document.getElementById("dj-name").value = "";
+      document.getElementById("dj-email").value = "";
       document.getElementById("days-container").innerHTML = "";
       document.querySelectorAll(".month-chip").forEach(b => b.classList.remove("active"));
       document.getElementById("submit-btn").disabled = false;
@@ -359,6 +376,7 @@
       document.getElementById("form-view").style.display = "block";
       document.getElementById("confirm-view").style.display = "none";
       document.getElementById("name-err").classList.remove("show");
+      document.getElementById("email-err").classList.remove("show");
       document.getElementById("month-err").classList.remove("show");
       document.getElementById("slots-err").classList.remove("show");
       selectedMonth = null; availability = {}; nightMeta = {};

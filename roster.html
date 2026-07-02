@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LKF Bar — Roster</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #050505;
+    color: #fff;
+    min-height: 100vh;
+    padding: 0 0 2rem 0;
+  }
+  .page-wrap { max-width: 700px; margin: 0 auto; padding: 0 1rem; }
+  .header {
+    background: #1a4a2e;
+    padding: 1.25rem 1.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .header h1 {
+    font-size: 20px; font-weight: 700; color: #FFD700;
+    margin: 0 0 4px; display: flex; align-items: center; gap: 8px;
+  }
+  .header p { font-size: 13px; color: #a8d4b8; margin: 0; }
+  .form-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 10px; font-size: 12px; font-weight: 600;
+    color: #FFD700; text-decoration: none; letter-spacing: 0.3px;
+  }
+  .form-link:hover { text-decoration: underline; }
+  .field-row { margin-bottom: 1.5rem; }
+  .field-row label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: #FFD700; margin-bottom: 6px;
+    letter-spacing: 0.8px; text-transform: uppercase;
+  }
+  .field-row select {
+    width: 100%; padding: 10px 12px; font-size: 15px;
+    border: 1px solid #2a5a3a; border-radius: 8px;
+    background: #143d25; color: #fff; font-family: inherit; outline: none;
+    appearance: none; -webkit-appearance: none;
+  }
+  .field-row select:focus { border-color: #FFD700; }
+  .status-msg { font-size: 14px; color: #a8d4b8; text-align: center; padding: 2rem 0; }
+  .err-banner {
+    font-size: 13px; color: #ff8080; background: #3a0000;
+    border: 1px solid #8B2020; border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 1.25rem; display: none;
+  }
+  .err-banner.show { display: block; }
+  .my-sets-bar {
+    display: none; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+    background: #143d25; border: 1px solid #2a5a3a; border-radius: 10px;
+    padding: 0.9rem 1.1rem; margin-bottom: 1.5rem;
+  }
+  .my-sets-bar.show { display: flex; }
+  .my-sets-bar .msg { font-size: 13px; color: #a8d4b8; }
+  .cal-btn {
+    font-size: 12px; font-weight: 700; padding: 9px 16px; border: 2px solid #FFD700;
+    border-radius: 8px; cursor: pointer; background: #1a4a2e; color: #FFD700;
+    font-family: inherit; display: inline-flex; align-items: center; gap: 6px;
+    transition: all 0.12s; white-space: nowrap;
+  }
+  .cal-btn:hover:not(:disabled) { background: #FFD700; color: #1a4a2e; }
+  .cal-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .cal-btn.small { font-size: 11px; padding: 6px 12px; border-width: 1px; }
+  .day-card {
+    border: 1px solid #2a5a3a; border-radius: 10px;
+    padding: 1rem 1.25rem; margin-bottom: 1rem; background: #143d25;
+  }
+  .day-title {
+    font-size: 14px; font-weight: 600; color: #FFD700;
+    margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .day-title i { font-size: 16px; color: #5aad70; }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-top: 1px solid #1e5030; gap: 12px; flex-wrap: wrap;
+  }
+  .set-info { display: flex; flex-direction: column; gap: 2px; }
+  .set-label { font-size: 13px; color: #a8d4b8; }
+  .set-dj { font-size: 13px; font-weight: 600; color: #fff; }
+  .set-dj.unassigned { color: #5a7a68; font-weight: 400; font-style: italic; }
+  .set-row.mine { background: rgba(255, 215, 0, 0.06); border-radius: 6px; padding-left: 8px; padding-right: 8px; }
+  .set-row.mine .set-dj { color: #FFD700; }
+  .set-row.dimmed { opacity: 0.45; }
+  .no-email-note { font-size: 11px; color: #ff8080; }
+</style>
+</head>
+<body>
+  <div class="page-wrap">
+    <div class="header">
+      <h1><i class="ti ti-calendar-event"></i> LKF Bar — Roster</h1>
+      <p>Who's playing when. Pick your name to grab calendar invites for your sets.</p>
+      <a class="form-link" href="index.html"><i class="ti ti-send"></i> Submit Availability</a>
+    </div>
+
+    <div class="err-banner" id="err-banner">Couldn't load the roster from the sheet. Please try again shortly.</div>
+    <div class="status-msg" id="status-msg"><i class="ti ti-loader"></i> Loading roster…</div>
+
+    <div id="content" style="display:none">
+      <div class="field-row">
+        <label>Your name</label>
+        <select id="dj-picker">
+          <option value="">— None selected —</option>
+          <option value="Bunni">Bunni</option>
+          <option value="Nam">Nam</option>
+          <option value="K-Otic">K-Otic</option>
+          <option value="Mu">Mu</option>
+          <option value="Nova">Nova</option>
+          <option value="Slender">Slender</option>
+          <option value="Lance">Lance</option>
+          <option value="Buttons">Buttons</option>
+          <option value="Claz">Claz</option>
+          <option value="Sef">Sef</option>
+        </select>
+      </div>
+
+      <div class="my-sets-bar" id="my-sets-bar">
+        <span class="msg" id="my-sets-msg"></span>
+        <button class="cal-btn" id="add-all-btn"><i class="ti ti-calendar-plus"></i> Add all my sets to Calendar</button>
+      </div>
+
+      <div id="roster-board"></div>
+    </div>
+  </div>
+
+<script>
+  const SHEET_ID = "18k60OYTIlCBkWXOLs4rSb-NsxnWrjwNsQlfjnWpqZwA";
+  const ROSTER_GID = "1178938300";
+  const AVAILABILITY_GID = "406805328";
+  const ORGANIZER_EMAIL = "benki@redlineartistry.com";
+  const ORGANIZER_NAME = "LKF Bar";
+  const VENUE_NAME = "LKF Bar";
+  const TIME_ZONE = "Australia/Melbourne";
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  function csvUrl(gid) {
+    // headers=1 stops gviz from auto-merging the "Month: ..." title row into the header row.
+    return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&headers=1`;
+  }
+
+  // Minimal CSV parser: handles quoted fields, embedded commas, and "" escaped quotes.
+  function parseCsv(text) {
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ",") {
+        row.push(field); field = "";
+      } else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = "";
+        rows.push(row); row = [];
+      } else {
+        field += c;
+      }
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+    return rows.filter(r => r.some(cell => cell !== ""));
+  }
+
+  async function fetchCsv(gid) {
+    const res = await fetch(csvUrl(gid));
+    if (!res.ok) throw new Error(`Sheet fetch failed (${res.status})`);
+    return parseCsv(await res.text());
+  }
+
+  function indexHeader(headerRow) {
+    const idx = {};
+    headerRow.forEach((name, i) => { idx[name.trim()] = i; });
+    return idx;
+  }
+
+  function parseRosterMonth(rows) {
+    const m = /^Month:\s*([A-Za-z]+)\s+(\d{4})$/.exec((rows[0][0] || "").trim());
+    if (!m) throw new Error("Couldn't find 'Month: <Month> <Year>' header in Roster tab.");
+    return { monthName: m[1], monthIdx: MONTHS.indexOf(m[1]), year: parseInt(m[2], 10) };
+  }
+
+  function parseRosterSlots(rows) {
+    const { monthIdx, year } = parseRosterMonth(rows);
+    const idx = indexHeader(rows[1]);
+    const DATE_COL = 0; // gviz strips this header cell's text ("Date"), so use its fixed position
+    const slots = [];
+    for (let i = 2; i < rows.length; i++) {
+      const r = rows[i];
+      const dateLabel = (r[DATE_COL] || "").trim();
+      if (!dateLabel) continue;
+      const dayNum = parseInt(dateLabel, 10);
+      if (Number.isNaN(dayNum)) continue;
+      slots.push({
+        dateLabel,
+        day: (r[idx["Day"]] || "").trim(),
+        setTime: (r[idx["Set Time"]] || "").trim(),
+        assignedDJ: (r[idx["Assigned DJ"]] || "").trim(),
+        dayNum, monthIdx, year
+      });
+    }
+    return slots;
+  }
+
+  function buildEmailMap(rows) {
+    const idx = indexHeader(rows[0]);
+    const map = {};
+    if (!("Email" in idx)) return map; // Apps Script not updated yet / no submissions with email
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const name = (r[idx["DJ name"]] || "").trim();
+      const email = (r[idx["Email"]] || "").trim();
+      if (name && email) map[name] = email; // later rows overwrite earlier ones (most recent wins)
+    }
+    return map;
+  }
+
+  // Parses "8:30pm", "9pm", "12am" -> 24h {hour, minute}
+  function parseClock12(str) {
+    const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i.exec(str.trim());
+    if (!m) return null;
+    let hour = parseInt(m[1], 10) % 12;
+    if (/pm/i.test(m[3])) hour += 12;
+    return { hour, minute: m[2] ? parseInt(m[2], 10) : 0 };
+  }
+
+  // Nightclub hours run ~6pm-6am; anything before 6am belongs to the day after dayNum.
+  function clockToDate(clock, dayNum, monthIdx, year) {
+    const dayOffset = clock.hour < 6 ? 1 : 0;
+    return { dayNum: dayNum + dayOffset, monthIdx, year, hour: clock.hour, minute: clock.minute };
+  }
+
+  function tzOffsetMinutes(date, timeZone) {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone, hourCycle: "h23",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
+    const parts = Object.fromEntries(dtf.formatToParts(date).map(p => [p.type, p.value]));
+    const asUTC = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+    return (asUTC - date.getTime()) / 60000;
+  }
+
+  // Converts a Melbourne local wall-clock time to the correct UTC Date instant (DST-aware).
+  function melbourneLocalToUtc({ dayNum, monthIdx, year, hour, minute }) {
+    const guess = Date.UTC(year, monthIdx, dayNum, hour, minute);
+    const offsetMin = tzOffsetMinutes(new Date(guess), TIME_ZONE);
+    return new Date(guess - offsetMin * 60000);
+  }
+
+  function parseSlotTimes(slot) {
+    const [startStr, endStr] = slot.setTime.split(/[–-]/).map(s => s.trim());
+    const startClock = parseClock12(startStr);
+    const endClock = parseClock12(endStr);
+    if (!startClock || !endClock) return null;
+    const startLocal = clockToDate(startClock, slot.dayNum, slot.monthIdx, slot.year);
+    const endLocal = clockToDate(endClock, slot.dayNum, slot.monthIdx, slot.year);
+    return { start: melbourneLocalToUtc(startLocal), end: melbourneLocalToUtc(endLocal) };
+  }
+
+  function icsDate(date) {
+    return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  }
+
+  function icsEscape(str) {
+    return String(str).replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  }
+
+  function buildVevent(slot, djName, djEmail) {
+    const times = parseSlotTimes(slot);
+    if (!times) return null;
+    const uid = `${slot.year}${slot.monthIdx}${slot.dayNum}-${icsEscape(slot.setTime)}-${icsEscape(djName)}@dj-availability.lkfbar`;
+    return [
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTAMP:${icsDate(new Date())}`,
+      `DTSTART:${icsDate(times.start)}`,
+      `DTEND:${icsDate(times.end)}`,
+      `SUMMARY:${icsEscape(VENUE_NAME)} — ${icsEscape(djName)} set`,
+      `LOCATION:${icsEscape(VENUE_NAME)}`,
+      `ORGANIZER;CN=${icsEscape(ORGANIZER_NAME)}:mailto:${ORGANIZER_EMAIL}`,
+      `ATTENDEE;CN=${icsEscape(djName)};RSVP=TRUE:mailto:${djEmail}`,
+      "STATUS:CONFIRMED",
+      "END:VEVENT"
+    ].join("\r\n");
+  }
+
+  function buildIcs(vevents) {
+    return [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//LKF Bar//Roster//EN",
+      "CALSCALE:GREGORIAN",
+      ...vevents,
+      "END:VCALENDAR"
+    ].join("\r\n");
+  }
+
+  function downloadIcs(filename, vevents) {
+    const blob = new Blob([buildIcs(vevents)], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function slugify(str) {
+    return String(str).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  }
+
+  function init(slots, emailMap) {
+    const board = document.getElementById("roster-board");
+    board.innerHTML = "";
+
+    // Group slots by dateLabel+day, in sheet order.
+    const byDate = [];
+    const dateIndex = {};
+    slots.forEach(slot => {
+      const key = `${slot.dateLabel}-${slot.day}`;
+      if (!(key in dateIndex)) {
+        dateIndex[key] = byDate.length;
+        byDate.push({ dateLabel: slot.dateLabel, day: slot.day, slots: [] });
+      }
+      byDate[dateIndex[key]].slots.push(slot);
+    });
+
+    function render(selectedDJ) {
+      board.innerHTML = "";
+      byDate.forEach(group => {
+        const card = document.createElement("div");
+        card.className = "day-card";
+        card.innerHTML = `<div class="day-title"><i class="ti ti-calendar-event"></i>${group.day}, ${group.dateLabel}</div>`;
+        group.slots.forEach(slot => {
+          const isMine = selectedDJ && slot.assignedDJ === selectedDJ;
+          const row = document.createElement("div");
+          row.className = "set-row" + (isMine ? " mine" : selectedDJ ? " dimmed" : "");
+          const djLabel = slot.assignedDJ
+            ? `<span class="set-dj">${slot.assignedDJ}</span>`
+            : `<span class="set-dj unassigned">Unassigned</span>`;
+          row.innerHTML = `
+            <div class="set-info">
+              <span class="set-label">${slot.setTime}</span>
+              ${djLabel}
+            </div>`;
+          if (isMine) {
+            const email = emailMap[selectedDJ];
+            if (email) {
+              const btn = document.createElement("button");
+              btn.className = "cal-btn small";
+              btn.innerHTML = '<i class="ti ti-calendar-plus"></i> Add to Calendar';
+              btn.onclick = () => {
+                const vevent = buildVevent(slot, selectedDJ, email);
+                if (vevent) downloadIcs(`LKF-Bar-${slugify(selectedDJ)}-${slugify(slot.dateLabel)}.ics`, [vevent]);
+              };
+              row.appendChild(btn);
+            } else {
+              const note = document.createElement("span");
+              note.className = "no-email-note";
+              note.textContent = "No email on file yet";
+              row.appendChild(note);
+            }
+          }
+          card.appendChild(row);
+        });
+        board.appendChild(card);
+      });
+    }
+
+    render(null);
+
+    const picker = document.getElementById("dj-picker");
+    const myBar = document.getElementById("my-sets-bar");
+    const myMsg = document.getElementById("my-sets-msg");
+    const addAllBtn = document.getElementById("add-all-btn");
+
+    picker.addEventListener("change", () => {
+      const selectedDJ = picker.value;
+      render(selectedDJ);
+      if (!selectedDJ) { myBar.classList.remove("show"); return; }
+
+      const mySlots = slots.filter(s => s.assignedDJ === selectedDJ);
+      const email = emailMap[selectedDJ];
+      myBar.classList.add("show");
+
+      if (mySlots.length === 0) {
+        myMsg.textContent = "You don't have any sets on this roster yet.";
+        addAllBtn.style.display = "none";
+      } else if (!email) {
+        myMsg.textContent = `${mySlots.length} set${mySlots.length === 1 ? "" : "s"} — no email on file yet. Submit your next availability form to enable calendar invites.`;
+        addAllBtn.style.display = "none";
+      } else {
+        myMsg.textContent = `You have ${mySlots.length} set${mySlots.length === 1 ? "" : "s"} on this roster.`;
+        addAllBtn.style.display = "inline-flex";
+        addAllBtn.onclick = () => {
+          const vevents = mySlots.map(s => buildVevent(s, selectedDJ, email)).filter(Boolean);
+          downloadIcs(`LKF-Bar-${slugify(selectedDJ)}-all-sets.ics`, vevents);
+        };
+      }
+    });
+  }
+
+  async function main() {
+    try {
+      const [rosterRows, availabilityRows] = await Promise.all([
+        fetchCsv(ROSTER_GID),
+        fetchCsv(AVAILABILITY_GID)
+      ]);
+      const slots = parseRosterSlots(rosterRows);
+      const emailMap = buildEmailMap(availabilityRows);
+      document.getElementById("status-msg").style.display = "none";
+      document.getElementById("content").style.display = "block";
+      init(slots, emailMap);
+    } catch (err) {
+      console.error(err);
+      document.getElementById("status-msg").style.display = "none";
+      const banner = document.getElementById("err-banner");
+      banner.classList.add("show");
+    }
+  }
+
+  main();
+</script>
+</body>
+</html>
