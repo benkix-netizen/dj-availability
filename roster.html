@@ -105,6 +105,7 @@
     letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px;
   }
   .promo-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .promo-btn-dates { opacity: 0.7; font-weight: 400; }
 </style>
 </head>
 <body>
@@ -455,12 +456,17 @@
     const container = document.getElementById("promo-buttons");
     const weeks = groupSlotsIntoWeeks(slots);
     weeks.forEach((weekNights, i) => {
+      const first = weekNights[0].dateLabel;
+      const last = weekNights[weekNights.length - 1].dateLabel;
+      const dateRange = first === last ? first : `${first} – ${last}`;
+      const filenameDates = first === last ? slugify(first) : `${slugify(first)}-to-${slugify(last)}`;
+
       const btn = document.createElement("button");
       btn.className = "cal-btn small";
-      btn.innerHTML = `<i class="ti ti-download"></i> Week ${i + 1}`;
+      btn.innerHTML = `<i class="ti ti-download"></i> Week ${i + 1} <span class="promo-btn-dates">(${dateRange})</span>`;
       btn.onclick = () => {
         const svg = buildStorySvg(weekNights, `Week ${i + 1}`, monthLabel);
-        downloadStoryPng(svg, `LKF-Bar-${slugify(monthLabel)}-week-${i + 1}.png`);
+        downloadStoryPng(svg, `LKF-Bar-${slugify(monthLabel)}-${filenameDates}.png`);
       };
       container.appendChild(btn);
     });
