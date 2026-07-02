@@ -68,6 +68,8 @@
   .cal-btn:hover:not(:disabled) { background: #FFD700; color: #1a4a2e; }
   .cal-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .cal-btn.small { font-size: 11px; padding: 6px 12px; border-width: 1px; }
+  .cal-btn.swap { border-color: #ffb74d; color: #ffb74d; background: #1a4a2e; }
+  .cal-btn.swap:hover:not(:disabled) { background: #ffb74d; color: #1a4a2e; }
   .day-card {
     border: 1px solid #2a5a3a; border-radius: 10px;
     padding: 1rem 1.25rem; margin-bottom: 1rem; background: #143d25;
@@ -89,6 +91,20 @@
   .set-row.mine .set-dj { color: #FFD700; }
   .set-row.dimmed { opacity: 0.45; }
   .no-email-note { font-size: 11px; color: #ff8080; }
+  .swap-badge {
+    display: inline-flex; align-items: center; gap: 4px; width: fit-content;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+    color: #ffb74d; background: rgba(255, 183, 77, 0.12);
+    border: 1px solid rgba(255, 183, 77, 0.4); border-radius: 999px; padding: 2px 8px;
+  }
+  .volunteer-list { font-size: 11px; color: #a8d4b8; }
+  .swap-status { font-size: 11px; color: #ffb74d; }
+  .promo-section { margin-top: 1.75rem; }
+  .promo-label {
+    font-size: 12px; font-weight: 600; color: #FFD700;
+    letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .promo-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>
 </head>
 <body>
@@ -126,6 +142,11 @@
       </div>
 
       <div id="roster-board"></div>
+
+      <div class="promo-section" id="promo-section">
+        <div class="promo-label">Share this month</div>
+        <div class="promo-buttons" id="promo-buttons"></div>
+      </div>
     </div>
   </div>
 
@@ -133,6 +154,8 @@
   const SHEET_ID = "18k60OYTIlCBkWXOLs4rSb-NsxnWrjwNsQlfjnWpqZwA";
   const ROSTER_GID = "1178938300";
   const AVAILABILITY_GID = "406805328";
+  const SWAP_SHEET_NAME = "SwapRequests"; // no fixed gid yet -- created on first use, so fetched by name
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPEaIosP4j_ckgE3Nr9Lnm71YhpTEGiaTbT-Qs1KDPITXkS9XeHVl0OMRoFVyPZOW-/exec";
   const ORGANIZER_EMAIL = "benki@redlineartistry.com";
   const ORGANIZER_NAME = "LKF Bar";
   const VENUE_NAME = "LKF Bar";
@@ -142,6 +165,10 @@
   function csvUrl(gid) {
     // headers=1 stops gviz from auto-merging the "Month: ..." title row into the header row.
     return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}&headers=1`;
+  }
+
+  function csvUrlBySheetName(name) {
+    return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(name)}&headers=1`;
   }
 
   // Minimal CSV parser: handles quoted fields, embedded commas, and "" escaped quotes.
@@ -177,6 +204,21 @@
     const res = await fetch(csvUrl(gid));
     if (!res.ok) throw new Error(`Sheet fetch failed (${res.status})`);
     return parseCsv(await res.text());
+  }
+
+  // For tabs with no fixed gid (e.g. auto-created on first use). Returns []
+  // instead of throwing if the tab doesn't exist yet -- treated as "no data".
+  async function fetchCsvBySheetName(name) {
+    try {
+      const res = await fetch(csvUrlBySheetName(name));
+      if (!res.ok) return [];
+      const rows = parseCsv(await res.text());
+      // gviz returns an HTML error page (not CSV) for a sheet name that doesn't exist.
+      if (rows.length && /<html/i.test(rows[0][0] || "")) return [];
+      return rows;
+    } catch (err) {
+      return [];
+    }
   }
 
   function indexHeader(headerRow) {
@@ -320,7 +362,143 @@
     return String(str).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   }
 
-  function init(slots, emailMap) {
+  function escapeXml(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // Same "3 nights per week" chunking generateRoster() uses server-side.
+  function groupSlotsIntoWeeks(slots) {
+    const byDate = [];
+    const seen = {};
+    slots.forEach(slot => {
+      const key = `${slot.dateLabel}-${slot.day}`;
+      if (!(key in seen)) {
+        seen[key] = byDate.length;
+        byDate.push({ dateLabel: slot.dateLabel, day: slot.day, slots: [] });
+      }
+      byDate[seen[key]].slots.push(slot);
+    });
+    const weeks = [];
+    for (let i = 0; i < byDate.length; i += 3) weeks.push(byDate.slice(i, i + 3));
+    return weeks;
+  }
+
+  // 1080x1920 (Instagram Story). Uses system fonts, not the Google Fonts used
+  // elsewhere on the page -- custom @import fonts inside an SVG often fail to
+  // load when rasterized via <img>+canvas, so this favours reliability.
+  function buildStorySvg(weekNights, weekLabel, monthLabel) {
+    const W = 1080, H = 1920;
+    const lines = [];
+    let y = 490;
+
+    weekNights.forEach(night => {
+      lines.push(`<text x="90" y="${y}" font-family="Georgia, serif" font-weight="700" font-size="46" fill="#FFD700">${escapeXml(night.day)}, ${escapeXml(night.dateLabel)}</text>`);
+      y += 20;
+      lines.push(`<line x1="90" y1="${y}" x2="990" y2="${y}" stroke="#2a5a3a" stroke-width="2"/>`);
+      y += 56;
+      night.slots.forEach(slot => {
+        const djName = slot.assignedDJ || "Unassigned";
+        const djColor = slot.assignedDJ ? "#ffffff" : "#5a7a68";
+        const djStyle = slot.assignedDJ ? "" : ' font-style="italic"';
+        lines.push(`<text x="90" y="${y}" font-family="Segoe UI, sans-serif" font-size="32" fill="#a8d4b8">${escapeXml(slot.setTime)}</text>`);
+        lines.push(`<text x="990" y="${y}" text-anchor="end" font-family="Segoe UI, sans-serif" font-weight="700" font-size="34" fill="${djColor}"${djStyle}>${escapeXml(djName)}</text>`);
+        y += 62;
+      });
+      y += 56;
+    });
+
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="storyBg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0a0f0c"/>
+          <stop offset="100%" stop-color="#020302"/>
+        </linearGradient>
+      </defs>
+      <rect width="${W}" height="${H}" fill="url(#storyBg)"/>
+      <g stroke="#FFD700" stroke-width="3" fill="none" opacity="0.85">
+        <path d="M 50 170 V 90 Q 50 60 80 60 H 160"/>
+        <path d="M 920 60 H 1000 Q 1030 60 1030 90 V 170"/>
+        <path d="M 1030 ${H - 170} V ${H - 90} Q 1030 ${H - 60} 1000 ${H - 60} H 920"/>
+        <path d="M 160 ${H - 60} H 80 Q 50 ${H - 60} 50 ${H - 90} V ${H - 170}"/>
+      </g>
+      <text x="540" y="180" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="28" letter-spacing="6" fill="#FFD700">LKF BAR</text>
+      <text x="540" y="290" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="72" fill="#ffffff">${escapeXml(monthLabel)}</text>
+      <text x="540" y="360" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="34" letter-spacing="4" fill="#FFD700">${escapeXml(weekLabel.toUpperCase())}</text>
+      <line x1="440" y1="410" x2="640" y2="410" stroke="#FFD700" stroke-width="2"/>
+      ${lines.join("\n      ")}
+      <text x="540" y="${H - 90}" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="24" fill="#a8d4b8">Full roster: benkix-netizen.github.io/dj-availability/roster.html</text>
+    </svg>`;
+  }
+
+  function downloadStoryPng(svgString, filename) {
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1080; canvas.height = 1920;
+      canvas.getContext("2d").drawImage(img, 0, 0, 1080, 1920);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        const pngUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = pngUrl; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(pngUrl);
+      }, "image/png");
+    };
+    img.onerror = () => { console.error("Failed to render story image"); URL.revokeObjectURL(url); };
+    img.src = url;
+  }
+
+  function initPromoButtons(slots, monthLabel) {
+    const container = document.getElementById("promo-buttons");
+    const weeks = groupSlotsIntoWeeks(slots);
+    weeks.forEach((weekNights, i) => {
+      const btn = document.createElement("button");
+      btn.className = "cal-btn small";
+      btn.innerHTML = `<i class="ti ti-download"></i> Week ${i + 1}`;
+      btn.onclick = () => {
+        const svg = buildStorySvg(weekNights, `Week ${i + 1}`, monthLabel);
+        downloadStoryPng(svg, `LKF-Bar-${slugify(monthLabel)}-week-${i + 1}.png`);
+      };
+      container.appendChild(btn);
+    });
+  }
+
+  // Only "open" requests matter here -- once the owner reassigns the slot in
+  // the Roster tab and flips Status to "resolved" in the sheet, it drops out
+  // of this map and disappears from the page on the next load.
+  function parseSwapMap(rows) {
+    const map = {};
+    if (!rows || rows.length === 0) return map;
+    const idx = indexHeader(rows[0]);
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if ((r[idx["Status"]] || "").trim() !== "open") continue;
+      const date = (r[idx["Date"]] || "").trim();
+      const setTime = (r[idx["Set time"]] || "").trim();
+      const requestedBy = (r[idx["DJ name"]] || "").trim();
+      const month = (r[idx["Month"]] || "").trim();
+      const day = (r[idx["Day"]] || "").trim();
+      const volunteers = (r[idx["Volunteers"]] || "").split(",").map(s => s.trim()).filter(Boolean);
+      map[`${date}|${setTime}`] = { requestedBy, month, day, setTime, date, volunteers };
+    }
+    return map;
+  }
+
+  // Fire-and-forget, same as the availability form's submit -- Apps Script
+  // Web Apps don't reliably send CORS headers on POST responses, so we post
+  // with no-cors (opaque response) and update the UI optimistically.
+  async function postToScript(payload) {
+    await fetch(SCRIPT_URL, {
+      method: "POST", mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function init(slots, emailMap, swapMap) {
     const board = document.getElementById("roster-board");
     board.innerHTML = "";
 
@@ -344,6 +522,8 @@
         card.innerHTML = `<div class="day-title"><i class="ti ti-calendar-event"></i>${group.day}, ${group.dateLabel}</div>`;
         group.slots.forEach(slot => {
           const isMine = selectedDJ && slot.assignedDJ === selectedDJ;
+          const swapKey = `${slot.dateLabel}|${slot.setTime}`;
+          const openSwap = swapMap[swapKey];
           const row = document.createElement("div");
           row.className = "set-row" + (isMine ? " mine" : selectedDJ ? " dimmed" : "");
           const djLabel = slot.assignedDJ
@@ -353,7 +533,10 @@
             <div class="set-info">
               <span class="set-label">${slot.setTime}</span>
               ${djLabel}
+              ${openSwap ? '<span class="swap-badge">🔁 Needs coverage</span>' : ''}
+              ${openSwap && openSwap.volunteers.length ? `<span class="volunteer-list">Volunteered: ${openSwap.volunteers.join(", ")}</span>` : ''}
             </div>`;
+
           if (isMine) {
             const email = emailMap[selectedDJ];
             if (email) {
@@ -371,7 +554,50 @@
               note.textContent = "No email on file yet";
               row.appendChild(note);
             }
+
+            if (openSwap) {
+              const status = document.createElement("span");
+              status.className = "swap-status";
+              status.textContent = "Coverage requested — waiting for a volunteer";
+              row.appendChild(status);
+            } else {
+              const swapBtn = document.createElement("button");
+              swapBtn.className = "cal-btn swap small";
+              swapBtn.innerHTML = '<i class="ti ti-flag"></i> Need Coverage';
+              swapBtn.onclick = async () => {
+                swapBtn.disabled = true;
+                const monthLabel = `${MONTHS[slot.monthIdx]} ${slot.year}`;
+                await postToScript({
+                  action: "requestCoverage",
+                  djName: selectedDJ, month: monthLabel, date: slot.dateLabel, day: slot.day, setTime: slot.setTime
+                });
+                swapMap[swapKey] = { requestedBy: selectedDJ, month: monthLabel, day: slot.day, setTime: slot.setTime, date: slot.dateLabel, volunteers: [] };
+                render(selectedDJ);
+              };
+              row.appendChild(swapBtn);
+            }
+          } else if (openSwap && selectedDJ && slot.assignedDJ !== selectedDJ) {
+            const alreadyVolunteered = openSwap.volunteers.includes(selectedDJ);
+            const volBtn = document.createElement("button");
+            volBtn.className = "cal-btn swap small";
+            if (alreadyVolunteered) {
+              volBtn.innerHTML = '<i class="ti ti-check"></i> You volunteered';
+              volBtn.disabled = true;
+            } else {
+              volBtn.innerHTML = "I can cover this";
+              volBtn.onclick = async () => {
+                volBtn.disabled = true;
+                await postToScript({
+                  action: "volunteer",
+                  djName: selectedDJ, month: openSwap.month, date: openSwap.date, day: openSwap.day, setTime: openSwap.setTime
+                });
+                openSwap.volunteers.push(selectedDJ);
+                render(selectedDJ);
+              };
+            }
+            row.appendChild(volBtn);
           }
+
           card.appendChild(row);
         });
         board.appendChild(card);
@@ -413,15 +639,21 @@
 
   async function main() {
     try {
-      const [rosterRows, availabilityRows] = await Promise.all([
+      const [rosterRows, availabilityRows, swapRows] = await Promise.all([
         fetchCsv(ROSTER_GID),
-        fetchCsv(AVAILABILITY_GID)
+        fetchCsv(AVAILABILITY_GID),
+        fetchCsvBySheetName(SWAP_SHEET_NAME)
       ]);
       const slots = parseRosterSlots(rosterRows);
       const emailMap = buildEmailMap(availabilityRows);
+      const swapMap = parseSwapMap(swapRows);
       document.getElementById("status-msg").style.display = "none";
       document.getElementById("content").style.display = "block";
-      init(slots, emailMap);
+      init(slots, emailMap, swapMap);
+      if (slots.length) {
+        const monthLabel = `${MONTHS[slots[0].monthIdx]} ${slots[0].year}`;
+        initPromoButtons(slots, monthLabel);
+      }
     } catch (err) {
       console.error(err);
       document.getElementById("status-msg").style.display = "none";
