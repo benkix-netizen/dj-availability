@@ -116,6 +116,8 @@
     .error { font-size: 12px; color: #ff8080; margin-top: 5px; display: none; }
     .error.show { display: block; }
     .sending { font-size: 14px; color: #a8d4b8; text-align: center; margin-top: 12px; display: none; }
+    .prefill-msg { font-size: 13px; color: #FFD700; text-align: center; margin: -0.75rem 0 1.25rem; display: none; }
+    .prefill-msg.show { display: block; }
     .err-banner {
       font-size: 13px; color: #ff8080; background: #3a0000;
       border: 1px solid #8B2020; border-radius: 8px;
@@ -173,6 +175,7 @@
         <div class="month-row" id="month-picker"></div>
         <div class="error" id="month-err">Please select a month.</div>
       </div>
+      <p class="prefill-msg" id="prefill-msg"></p>
       <div id="days-container"></div>
       <div class="error" id="slots-err">Please answer every set (Yes / Maybe / No) before submitting.</div>
       <button class="submit-btn" id="submit-btn" onclick="submitForm()">
@@ -192,7 +195,51 @@
 
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPEaIosP4j_ckgE3Nr9Lnm71YhpTEGiaTbT-Qs1KDPITXkS9XeHVl0OMRoFVyPZOW-/exec";
+    const SHEET_ID = "18k60OYTIlCBkWXOLs4rSb-NsxnWrjwNsQlfjnWpqZwA";
+    const AVAILABILITY_GID = "406805328";
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+    // Minimal CSV parser: handles quoted fields, embedded commas, and "" escaped quotes.
+    function parseCsv(text) {
+      const rows = [];
+      let row = [], field = "", inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (text[i + 1] === '"') { field += '"'; i++; }
+            else { inQuotes = false; }
+          } else {
+            field += c;
+          }
+        } else if (c === '"') {
+          inQuotes = true;
+        } else if (c === ",") {
+          row.push(field); field = "";
+        } else if (c === "\n" || c === "\r") {
+          if (c === "\r" && text[i + 1] === "\n") i++;
+          row.push(field); field = "";
+          rows.push(row); row = [];
+        } else {
+          field += c;
+        }
+      }
+      if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+      return rows.filter(r => r.some(cell => cell !== ""));
+    }
+
+    async function fetchAvailabilityRows() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${AVAILABILITY_GID}&headers=1`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Sheet fetch failed (${res.status})`);
+      return parseCsv(await res.text());
+    }
+
+    function indexHeader(headerRow) {
+      const idx = {};
+      headerRow.forEach((name, i) => { idx[name.trim()] = i; });
+      return idx;
+    }
     const setsByDay = {
       4: { name: "Thursday", sets: ["9pm – 11pm", "11pm – 1am"] },
       5: { name: "Friday",   sets: ["8:30pm – 10pm", "10pm – 12am", "12am – 2am"] },
@@ -291,6 +338,60 @@
         });
         container.appendChild(card);
       });
+
+      const currentName = document.getElementById("dj-name").value.trim();
+      if (currentName) prefillFromExisting(currentName, monthLabel);
+    }
+
+    async function prefillFromExisting(djName, monthLabel) {
+      const msgEl = document.getElementById("prefill-msg");
+      msgEl.textContent = "Checking for a previous submission…";
+      msgEl.classList.add("show");
+      try {
+        const rows = await fetchAvailabilityRows();
+        const idx = indexHeader(rows[0]);
+        const mine = rows.slice(1).filter(r =>
+          (r[idx["DJ name"]] || "").trim() === djName &&
+          (r[idx["Month"]] || "").trim() === monthLabel
+        );
+
+        if (mine.length === 0) {
+          msgEl.classList.remove("show");
+          return;
+        }
+
+        mine.forEach(r => {
+          const date = (r[idx["Date"]] || "").trim();
+          const setTime = (r[idx["Set time"]] || "").trim();
+          const avail = (r[idx["Availability"]] || "").trim();
+          if (!["yes", "maybe", "no"].includes(avail)) return;
+
+          const key = Object.keys(nightMeta).find(k => nightMeta[k].date === date && nightMeta[k].setTime === setTime);
+          if (!key) return;
+
+          availability[key] = avail;
+          const row = document.querySelector(`.set-row[data-key="${key}"]`);
+          if (row) {
+            row.classList.remove("unanswered");
+            row.querySelectorAll(".tog").forEach(b => b.classList.remove("active"));
+            row.querySelector(`.tog.${avail}`).classList.add("active");
+          }
+        });
+
+        // If they haven't typed an email yet this session, carry over the one on file.
+        const emailIdx = idx["Email"];
+        const emailField = document.getElementById("dj-email");
+        if (emailIdx !== undefined && !emailField.value.trim()) {
+          const withEmail = mine.find(r => (r[emailIdx] || "").trim());
+          if (withEmail) emailField.value = withEmail[emailIdx].trim();
+        }
+
+        msgEl.textContent = `Loaded your previous answers for ${monthLabel} — change anything you need, then resubmit.`;
+        msgEl.classList.add("show");
+      } catch (err) {
+        console.error(err);
+        msgEl.classList.remove("show");
+      }
     }
 
     function setAvail(btn, key, val) {
@@ -379,6 +480,7 @@
       document.getElementById("email-err").classList.remove("show");
       document.getElementById("month-err").classList.remove("show");
       document.getElementById("slots-err").classList.remove("show");
+      document.getElementById("prefill-msg").classList.remove("show");
       selectedMonth = null; availability = {}; nightMeta = {};
     }
 
@@ -404,6 +506,10 @@
       const el = document.getElementById("monthly-quote");
       if (el) el.textContent = monthlyQuotes[new Date().getMonth()];
     }
+
+    document.getElementById("dj-name").addEventListener("change", () => {
+      if (selectedMonth) buildDays(selectedMonth);
+    });
 
     showMonthlyQuote();
     buildMonthPicker();
