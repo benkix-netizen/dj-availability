@@ -202,6 +202,8 @@
     const AVAILABILITY_GID = "406805328";
     const SCHEDULE_SHEET_NAME = "Schedule";
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const DAY_NAMES_LONG = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
     // Minimal CSV parser: handles quoted fields, embedded commas, and "" escaped quotes.
     function parseCsv(text) {
@@ -344,8 +346,12 @@
       }
       allNights.forEach(({ date, dow }) => {
         const dayDef = setsByDay[dow];
-        const dateLabel = date.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "short" });
-        const dateShort = date.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
+        // Built from fixed lookup tables rather than toLocaleDateString -- some
+        // browsers render the "short" month option as the full month name
+        // instead of abbreviating it, which broke matching against dates
+        // stored elsewhere as "d MMM" (e.g. "2 Jul" vs "2 July").
+        const dateLabel = `${DAY_NAMES_LONG[date.getDay()]}, ${date.getDate()} ${MONTH_ABBR[date.getMonth()]}`;
+        const dateShort = `${date.getDate()} ${MONTH_ABBR[date.getMonth()]}`;
         const card = document.createElement("div");
         card.className = "day-card";
         card.innerHTML = `<div class="day-title"><i class="ti ti-calendar-event"></i>${dateLabel}</div>`;
