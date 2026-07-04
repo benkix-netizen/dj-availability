@@ -99,6 +99,25 @@
   }
   .volunteer-list { font-size: 11px; color: #a8d4b8; }
   .swap-status { font-size: 11px; color: #ffb74d; }
+  .cal-btn.report { border-color: #6ec6ff; color: #6ec6ff; background: #1a4a2e; }
+  .cal-btn.report:hover:not(:disabled) { background: #6ec6ff; color: #0f2a1a; }
+  .time-report-wrap { width: 100%; margin-top: 6px; }
+  .time-report-form {
+    display: none; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+    background: #0f2a1a; border: 1px solid #2a5a3a; border-radius: 8px;
+    padding: 10px 12px; margin-top: 8px;
+  }
+  .time-report-form.show { display: flex; }
+  .time-report-form label {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 11px; color: #a8d4b8; letter-spacing: 0.3px;
+  }
+  .time-report-form input {
+    background: #143d25; border: 1px solid #2a5a3a; border-radius: 6px;
+    color: #fff; font-family: inherit; font-size: 13px; padding: 6px 8px;
+  }
+  .time-report-form input[type="text"] { min-width: 160px; }
+  .tr-status { font-size: 11px; color: #6ec6ff; }
   .promo-section { margin-top: 1.75rem; }
   .promo-label {
     font-size: 12px; font-weight: 600; color: #FFD700;
@@ -363,6 +382,60 @@
     return String(str).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   }
 
+  // Reporting only makes sense once a set has actually happened.
+  function slotHasPassed(slot) {
+    const slotDate = new Date(slot.year, slot.monthIdx, slot.dayNum);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return slotDate <= today;
+  }
+
+  function buildTimeReportUi(slot, selectedDJ) {
+    const wrap = document.createElement("div");
+    wrap.className = "time-report-wrap";
+
+    const btn = document.createElement("button");
+    btn.className = "cal-btn report small";
+    btn.innerHTML = '<i class="ti ti-clock"></i> Report Actual Time';
+
+    const form = document.createElement("div");
+    form.className = "time-report-form";
+    form.innerHTML = `
+      <label>Actual start <input type="time" class="tr-start"></label>
+      <label>Actual end <input type="time" class="tr-end"></label>
+      <label>Note (optional) <input type="text" class="tr-note" placeholder="e.g. crowd wanted more"></label>
+      <button class="cal-btn small tr-submit">Submit</button>
+      <span class="tr-status"></span>
+    `;
+
+    btn.onclick = () => form.classList.toggle("show");
+
+    form.querySelector(".tr-submit").onclick = async () => {
+      const startVal = form.querySelector(".tr-start").value;
+      const endVal = form.querySelector(".tr-end").value;
+      const noteVal = form.querySelector(".tr-note").value.trim();
+      const statusEl = form.querySelector(".tr-status");
+      if (!startVal || !endVal) { statusEl.textContent = "Enter both times."; return; }
+
+      const submitBtn = form.querySelector(".tr-submit");
+      submitBtn.disabled = true;
+      const monthLabel = `${MONTHS[slot.monthIdx]} ${slot.year}`;
+      await postToScript({
+        action: "reportTime",
+        djName: selectedDJ, month: monthLabel, date: slot.dateLabel, day: slot.day,
+        scheduledSetTime: slot.setTime, actualStart: startVal, actualEnd: endVal, note: noteVal
+      });
+      statusEl.textContent = "Reported — thanks!";
+      form.querySelector(".tr-start").disabled = true;
+      form.querySelector(".tr-end").disabled = true;
+      form.querySelector(".tr-note").disabled = true;
+    };
+
+    wrap.appendChild(btn);
+    wrap.appendChild(form);
+    return wrap;
+  }
+
   function escapeXml(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
@@ -605,6 +678,9 @@
           }
 
           card.appendChild(row);
+          if (isMine && slotHasPassed(slot)) {
+            card.appendChild(buildTimeReportUi(slot, selectedDJ));
+          }
         });
         board.appendChild(card);
       });

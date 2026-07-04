@@ -116,6 +116,7 @@
     .error { font-size: 12px; color: #ff8080; margin-top: 5px; display: none; }
     .error.show { display: block; }
     .sending { font-size: 14px; color: #a8d4b8; text-align: center; margin-top: 12px; display: none; }
+    .loading-msg { font-size: 14px; color: #a8d4b8; text-align: center; padding: 2rem 0; }
     .prefill-msg { font-size: 13px; color: #FFD700; text-align: center; margin: -0.75rem 0 1.25rem; display: none; }
     .prefill-msg.show { display: block; }
     .err-banner {
@@ -146,7 +147,9 @@
       <a class="roster-link" href="roster.html"><i class="ti ti-calendar-event"></i> View Roster</a>
     </div>
 
-    <div id="form-view">
+    <p class="loading-msg" id="loading-msg"><i class="ti ti-loader"></i> Loading schedule…</p>
+
+    <div id="form-view" style="display:none">
       <p class="quote-line" id="monthly-quote"></p>
       <div class="field-row">
         <label>DJ Name</label>
@@ -197,6 +200,7 @@
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPEaIosP4j_ckgE3Nr9Lnm71YhpTEGiaTbT-Qs1KDPITXkS9XeHVl0OMRoFVyPZOW-/exec";
     const SHEET_ID = "18k60OYTIlCBkWXOLs4rSb-NsxnWrjwNsQlfjnWpqZwA";
     const AVAILABILITY_GID = "406805328";
+    const SCHEDULE_SHEET_NAME = "Schedule";
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
     // Minimal CSV parser: handles quoted fields, embedded commas, and "" escaped quotes.
@@ -240,12 +244,37 @@
       headerRow.forEach((name, i) => { idx[name.trim()] = i; });
       return idx;
     }
-    const setsByDay = {
-      4: { name: "Thursday", sets: ["9pm – 11pm", "11pm – 1am"] },
-      5: { name: "Friday",   sets: ["8:30pm – 10pm", "10pm – 12am", "12am – 2am"] },
-      6: { name: "Saturday", sets: ["8:30pm – 10pm", "10pm – 12am", "12am – 2am"] }
-    };
+    // Populated at load time from the Schedule tab -- see fetchScheduleDefs().
+    let setsByDay = null;
     let selectedMonth = null, availability = {}, nightMeta = {};
+
+    const DOW_NUMBERS = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+
+    // Reads the Schedule tab (Day, Label, Start, End -- one row per set) and
+    // groups it by weekday, the same shape this file used to get from a
+    // hardcoded setsByDay constant. Lets the owner add/change sets without
+    // touching code -- the Apps Script side reads the same tab.
+    async function fetchScheduleDefs() {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SCHEDULE_SHEET_NAME)}&headers=1`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Schedule fetch failed (${res.status})`);
+      const rows = parseCsv(await res.text());
+      const idx = indexHeader(rows[0]);
+      const byDow = {};
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        const dayName = (r[idx["Day"]] || "").trim();
+        const label = (r[idx["Label"]] || "").trim();
+        const dow = DOW_NUMBERS[dayName];
+        if (dow === undefined || !label) continue;
+        if (!byDow[dow]) byDow[dow] = { name: dayName, sets: [] };
+        byDow[dow].sets.push(label);
+      }
+      if (Object.keys(byDow).length === 0) {
+        throw new Error(`No valid rows found in the "${SCHEDULE_SHEET_NAME}" tab -- add rows: Day, Label, Start, End.`);
+      }
+      return byDow;
+    }
 
     // Roster weeks run Thursday -> Saturday. Returns the first Thursday
     // on/after the given year/month/day (month rollover, e.g. month 12,
@@ -511,8 +540,21 @@
       if (selectedMonth) buildDays(selectedMonth);
     });
 
-    showMonthlyQuote();
-    buildMonthPicker();
+    async function init() {
+      try {
+        setsByDay = await fetchScheduleDefs();
+      } catch (err) {
+        console.error(err);
+        document.getElementById("loading-msg").textContent = "Couldn't load the schedule. Please refresh or try again shortly.";
+        return;
+      }
+      document.getElementById("loading-msg").style.display = "none";
+      document.getElementById("form-view").style.display = "block";
+      showMonthlyQuote();
+      buildMonthPicker();
+    }
+
+    init();
   </script>
 </body>
 </html>
