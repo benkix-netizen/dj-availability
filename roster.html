@@ -44,6 +44,16 @@
     appearance: none; -webkit-appearance: none;
   }
   .field-row select:focus { border-color: #FFD700; }
+  .month-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem; }
+  .month-chip {
+    padding: 6px 16px; font-size: 13px; border: 1px solid #2a5a3a;
+    border-radius: 999px; cursor: pointer; background: #143d25;
+    color: #a8d4b8; font-family: inherit; transition: all 0.12s;
+  }
+  .month-chip.active {
+    background: #FFD700; border-color: #FFD700;
+    color: #0f2a1a; font-weight: 600;
+  }
   .status-msg { font-size: 14px; color: #a8d4b8; text-align: center; padding: 2rem 0; }
   .err-banner {
     font-size: 13px; color: #ff8080; background: #3a0000;
@@ -135,6 +145,8 @@
       <a class="form-link" href="index.html"><i class="ti ti-send"></i> Submit Availability</a>
     </div>
 
+    <div class="month-picker" id="month-picker"></div>
+
     <div class="err-banner" id="err-banner">Couldn't load the roster from the sheet. Please try again shortly.</div>
     <div class="status-msg" id="status-msg"><i class="ti ti-loader"></i> Loading roster…</div>
 
@@ -172,7 +184,7 @@
 
 <script>
   const SHEET_ID = "18k60OYTIlCBkWXOLs4rSb-NsxnWrjwNsQlfjnWpqZwA";
-  const ROSTER_GID = "1178938300";
+  const ROSTER_SHEET_PREFIX = "Roster - "; // generateRoster() writes a new tab per month, e.g. "Roster - July 2026"
   const AVAILABILITY_GID = "406805328";
   const SWAP_SHEET_NAME = "SwapRequests"; // no fixed gid yet -- created on first use, so fetched by name
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwPEaIosP4j_ckgE3Nr9Lnm71YhpTEGiaTbT-Qs1KDPITXkS9XeHVl0OMRoFVyPZOW-/exec";
@@ -180,6 +192,7 @@
   const ORGANIZER_NAME = "LKF Bar";
   const VENUE_NAME = "LKF Bar";
   const TIME_ZONE = "Australia/Melbourne";
+  const MONTH_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
   function csvUrl(gid) {
@@ -247,28 +260,64 @@
     return idx;
   }
 
-  function parseRosterMonth(rows) {
-    const m = /^Month:\s*([A-Za-z]+)\s+(\d{4})$/.exec((rows[0][0] || "").trim());
-    if (!m) throw new Error("Couldn't find 'Month: <Month> <Year>' header in Roster tab.");
-    return { monthName: m[1], monthIdx: MONTHS.indexOf(m[1]), year: parseInt(m[2], 10) };
+  function to12hLabel(hour, minute) {
+    const period = hour >= 12 ? "pm" : "am";
+    let h12 = hour % 12;
+    if (h12 === 0) h12 = 12;
+    return minute === 0 ? `${h12}${period}` : `${h12}:${String(minute).padStart(2, "0")}${period}`;
   }
 
-  function parseRosterSlots(rows) {
-    const { monthIdx, year } = parseRosterMonth(rows);
-    const idx = indexHeader(rows[1]);
-    const DATE_COL = 0; // gviz strips this header cell's text ("Date"), so use its fixed position
+  function parseTimeCell24(str) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(str).trim());
+    if (!m) return null;
+    return { hour: parseInt(m[1], 10), minute: parseInt(m[2], 10) };
+  }
+
+  // True only if the fetched tab's merged title cell actually matches the
+  // month we asked for -- gviz silently falls back to the spreadsheet's
+  // FIRST tab when a sheet name doesn't exist, so a plain "did it error?"
+  // check isn't enough to tell a missing month apart from a real one.
+  function rosterMonthMatches(rows, monthLabel) {
+    const title = (rows[0] && rows[0][0] || "").trim().toUpperCase();
+    return title === monthLabel.toUpperCase();
+  }
+
+  // Parses the week-by-week planning grid generateRoster() writes to
+  // "Roster - <Month>": WEEK header rows, then one row per set with real
+  // Start/Finish time cells and an Assigned DJ dropdown, followed by a
+  // trailing per-DJ stats block. We stop as soon as a row doesn't look like
+  // a week header or a date row ("Thursday, 2 July"), which is exactly
+  // where that stats block begins.
+  function parseGridSlots(rows, requestedMonthIdx, requestedYear) {
     const slots = [];
     for (let i = 2; i < rows.length; i++) {
       const r = rows[i];
-      const dateLabel = (r[DATE_COL] || "").trim();
-      if (!dateLabel) continue;
-      const dayNum = parseInt(dateLabel, 10);
-      if (Number.isNaN(dayNum)) continue;
+      const colA = (r[0] || "").trim();
+      if (colA === "") continue;
+      if (/^WEEK\s+\d+$/i.test(colA)) continue;
+      if (!colA.includes(",")) break;
+
+      // Boundary nights near a month's end are stored with their real month
+      // name (e.g. "Saturday, 1 August" inside the "Roster - July 2026"
+      // tab), not the requested month -- read it from the row itself rather
+      // than assuming every row belongs to the tab's nominal month.
+      const [dayName, datePart] = colA.split(",").map(s => s.trim());
+      const dm = /^(\d{1,2})\s+([A-Za-z]+)$/.exec(datePart || "");
+      if (!dm) continue;
+      const dayNum = parseInt(dm[1], 10);
+      const monthIdx = MONTHS.indexOf(dm[2]);
+      if (monthIdx === -1) continue;
+      const year = monthIdx < requestedMonthIdx ? requestedYear + 1 : requestedYear;
+
+      const start = parseTimeCell24(r[1]);
+      const end = parseTimeCell24(r[2]);
+      if (!start || !end) continue;
+
       slots.push({
-        dateLabel,
-        day: (r[idx["Day"]] || "").trim(),
-        setTime: (r[idx["Set Time"]] || "").trim(),
-        assignedDJ: (r[idx["Assigned DJ"]] || "").trim(),
+        dateLabel: `${dayNum} ${MONTH_ABBR[monthIdx]}`,
+        day: dayName,
+        setTime: `${to12hLabel(start.hour, start.minute)} – ${to12hLabel(end.hour, end.minute)}`,
+        assignedDJ: (r[4] || "").trim(),
         dayNum, monthIdx, year
       });
     }
@@ -577,14 +626,23 @@
     });
   }
 
-  function init(slots, emailMap, swapMap) {
+  // Roster data is reloaded whenever the DJ picks a different month, so it
+  // lives in mutable module-scope state rather than being captured once in
+  // a closure -- render() and the my-sets summary both read the latest
+  // values, and the dj-picker's change listener is wired up exactly once
+  // (see initControls()) instead of being re-attached on every month switch.
+  let currentSlots = [];
+  let currentEmailMap = {};
+  let currentSwapMap = {};
+
+  function render(selectedDJ) {
     const board = document.getElementById("roster-board");
     board.innerHTML = "";
 
     // Group slots by dateLabel+day, in sheet order.
     const byDate = [];
     const dateIndex = {};
-    slots.forEach(slot => {
+    currentSlots.forEach(slot => {
       const key = `${slot.dateLabel}-${slot.day}`;
       if (!(key in dateIndex)) {
         dateIndex[key] = byDate.length;
@@ -593,9 +651,8 @@
       byDate[dateIndex[key]].slots.push(slot);
     });
 
-    function render(selectedDJ) {
-      board.innerHTML = "";
-      byDate.forEach(group => {
+    const emailMap = currentEmailMap, swapMap = currentSwapMap;
+    byDate.forEach(group => {
         const card = document.createElement("div");
         card.className = "day-card";
         card.innerHTML = `<div class="day-title"><i class="ti ti-calendar-event"></i>${group.day}, ${group.dateLabel}</div>`;
@@ -683,59 +740,106 @@
           }
         });
         board.appendChild(card);
-      });
-    }
+    });
+  }
 
-    render(null);
-
-    const picker = document.getElementById("dj-picker");
+  function updateMySetsBar(selectedDJ) {
     const myBar = document.getElementById("my-sets-bar");
     const myMsg = document.getElementById("my-sets-msg");
     const addAllBtn = document.getElementById("add-all-btn");
 
+    if (!selectedDJ) { myBar.classList.remove("show"); return; }
+
+    const mySlots = currentSlots.filter(s => s.assignedDJ === selectedDJ);
+    const email = currentEmailMap[selectedDJ];
+    myBar.classList.add("show");
+
+    if (mySlots.length === 0) {
+      myMsg.textContent = "You don't have any sets on this roster yet.";
+      addAllBtn.style.display = "none";
+    } else if (!email) {
+      myMsg.textContent = `${mySlots.length} set${mySlots.length === 1 ? "" : "s"} — no email on file yet. Submit your next availability form to enable calendar invites.`;
+      addAllBtn.style.display = "none";
+    } else {
+      myMsg.textContent = `You have ${mySlots.length} set${mySlots.length === 1 ? "" : "s"} on this roster.`;
+      addAllBtn.style.display = "inline-flex";
+      addAllBtn.onclick = () => {
+        const vevents = mySlots.map(s => buildVevent(s, selectedDJ, email)).filter(Boolean);
+        downloadIcs(`LKF-Bar-${slugify(selectedDJ)}-all-sets.ics`, vevents);
+      };
+    }
+  }
+
+  // Wired up exactly once -- month switches only replace currentSlots/etc.
+  // and re-render, they never touch this listener.
+  function initControls() {
+    const picker = document.getElementById("dj-picker");
     picker.addEventListener("change", () => {
       const selectedDJ = picker.value;
       render(selectedDJ);
-      if (!selectedDJ) { myBar.classList.remove("show"); return; }
-
-      const mySlots = slots.filter(s => s.assignedDJ === selectedDJ);
-      const email = emailMap[selectedDJ];
-      myBar.classList.add("show");
-
-      if (mySlots.length === 0) {
-        myMsg.textContent = "You don't have any sets on this roster yet.";
-        addAllBtn.style.display = "none";
-      } else if (!email) {
-        myMsg.textContent = `${mySlots.length} set${mySlots.length === 1 ? "" : "s"} — no email on file yet. Submit your next availability form to enable calendar invites.`;
-        addAllBtn.style.display = "none";
-      } else {
-        myMsg.textContent = `You have ${mySlots.length} set${mySlots.length === 1 ? "" : "s"} on this roster.`;
-        addAllBtn.style.display = "inline-flex";
-        addAllBtn.onclick = () => {
-          const vevents = mySlots.map(s => buildVevent(s, selectedDJ, email)).filter(Boolean);
-          downloadIcs(`LKF-Bar-${slugify(selectedDJ)}-all-sets.ics`, vevents);
-        };
-      }
+      updateMySetsBar(selectedDJ);
     });
+  }
+
+  function buildMonthChips() {
+    const now = new Date();
+    const wrap = document.getElementById("month-picker");
+    wrap.innerHTML = "";
+    const chips = [];
+    for (let i = -1; i <= 2; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      chips.push({ monthIdx: d.getMonth(), year: d.getFullYear(), label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}` });
+    }
+    chips.forEach((chip, i) => {
+      const btn = document.createElement("button");
+      btn.className = "month-chip" + (i === 1 ? " active" : ""); // i===1 is "this month"
+      btn.textContent = chip.label;
+      btn.onclick = () => {
+        document.querySelectorAll(".month-chip").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        loadMonth(chip.label, chip.monthIdx, chip.year);
+      };
+      wrap.appendChild(btn);
+    });
+    return chips[1]; // default to "this month"
+  }
+
+  async function loadMonth(monthLabel, monthIdx, year) {
+    const statusMsg = document.getElementById("status-msg");
+    const errBanner = document.getElementById("err-banner");
+    const content = document.getElementById("content");
+    errBanner.classList.remove("show");
+    content.style.display = "none";
+    statusMsg.style.display = "block";
+    statusMsg.innerHTML = `<i class="ti ti-loader"></i> Loading ${monthLabel}…`;
+
+    const rosterRows = await fetchCsvBySheetName(ROSTER_SHEET_PREFIX + monthLabel);
+    if (rosterRows.length === 0 || !rosterMonthMatches(rosterRows, monthLabel)) {
+      statusMsg.textContent = `No roster generated for ${monthLabel} yet.`;
+      return;
+    }
+
+    currentSlots = parseGridSlots(rosterRows, monthIdx, year);
+    statusMsg.style.display = "none";
+    content.style.display = "block";
+
+    const picker = document.getElementById("dj-picker");
+    render(picker.value);
+    updateMySetsBar(picker.value);
+    initPromoButtons(currentSlots, monthLabel);
   }
 
   async function main() {
     try {
-      const [rosterRows, availabilityRows, swapRows] = await Promise.all([
-        fetchCsv(ROSTER_GID),
+      const [availabilityRows, swapRows] = await Promise.all([
         fetchCsv(AVAILABILITY_GID),
         fetchCsvBySheetName(SWAP_SHEET_NAME)
       ]);
-      const slots = parseRosterSlots(rosterRows);
-      const emailMap = buildEmailMap(availabilityRows);
-      const swapMap = parseSwapMap(swapRows);
-      document.getElementById("status-msg").style.display = "none";
-      document.getElementById("content").style.display = "block";
-      init(slots, emailMap, swapMap);
-      if (slots.length) {
-        const monthLabel = `${MONTHS[slots[0].monthIdx]} ${slots[0].year}`;
-        initPromoButtons(slots, monthLabel);
-      }
+      currentEmailMap = buildEmailMap(availabilityRows);
+      currentSwapMap = parseSwapMap(swapRows);
+      initControls();
+      const defaultChip = buildMonthChips();
+      await loadMonth(defaultChip.label, defaultChip.monthIdx, defaultChip.year);
     } catch (err) {
       console.error(err);
       document.getElementById("status-msg").style.display = "none";
