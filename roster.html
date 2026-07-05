@@ -798,25 +798,26 @@
   let currentMonthIdx = null;
   let currentYear = null;
 
-  function buildMonthChips() {
-    const now = new Date();
+  // Rebuilds the chip row centered on whatever month is being loaded (not
+  // fixed to "today") -- otherwise the chips go stale the moment the DJ
+  // arrow-navigates past the original window and no longer reflect where
+  // they actually are.
+  function buildMonthChips(centerMonthIdx, centerYear) {
     const wrap = document.getElementById("month-picker");
     wrap.innerHTML = "";
-    const chips = [];
     for (let i = -1; i <= 2; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      chips.push({ monthIdx: d.getMonth(), year: d.getFullYear(), label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}` });
-    }
-    chips.forEach(chip => {
+      let idx = centerMonthIdx + i;
+      let year = centerYear;
+      if (idx < 0) { idx += 12; year -= 1; }
+      if (idx > 11) { idx -= 12; year += 1; }
+      const label = `${MONTHS[idx]} ${year}`;
+
       const btn = document.createElement("button");
-      btn.className = "month-chip";
-      btn.textContent = chip.label;
-      btn.dataset.monthIdx = chip.monthIdx;
-      btn.dataset.year = chip.year;
-      btn.onclick = () => loadMonth(chip.label, chip.monthIdx, chip.year);
+      btn.className = "month-chip" + (i === 0 ? " active" : "");
+      btn.textContent = label;
+      btn.onclick = () => loadMonth(label, idx, year);
       wrap.appendChild(btn);
-    });
-    return chips[1]; // default to "this month"
+    }
   }
 
   // Wired up once -- steps currentMonthIdx/currentYear by one month in
@@ -836,9 +837,7 @@
   }
 
   async function loadMonth(monthLabel, monthIdx, year) {
-    document.querySelectorAll(".month-chip").forEach(b => {
-      b.classList.toggle("active", Number(b.dataset.monthIdx) === monthIdx && Number(b.dataset.year) === year);
-    });
+    buildMonthChips(monthIdx, year);
     currentMonthIdx = monthIdx;
     currentYear = year;
 
@@ -876,8 +875,8 @@
       currentSwapMap = parseSwapMap(swapRows);
       initControls();
       initMonthNavArrows();
-      const defaultChip = buildMonthChips();
-      await loadMonth(defaultChip.label, defaultChip.monthIdx, defaultChip.year);
+      const now = new Date();
+      await loadMonth(`${MONTHS[now.getMonth()]} ${now.getFullYear()}`, now.getMonth(), now.getFullYear());
     } catch (err) {
       console.error(err);
       document.getElementById("status-msg").style.display = "none";
