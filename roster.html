@@ -44,7 +44,14 @@
     appearance: none; -webkit-appearance: none;
   }
   .field-row select:focus { border-color: #FFD700; }
-  .month-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem; }
+  .month-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 1.5rem; }
+  .month-arrow {
+    flex-shrink: 0; width: 34px; height: 34px; font-size: 15px; border: 1px solid #2a5a3a;
+    border-radius: 999px; cursor: pointer; background: #143d25;
+    color: #FFD700; font-family: inherit; transition: all 0.12s;
+  }
+  .month-arrow:hover { background: #FFD700; color: #0f2a1a; }
+  .month-picker { display: flex; flex-wrap: wrap; gap: 8px; }
   .month-chip {
     padding: 6px 16px; font-size: 13px; border: 1px solid #2a5a3a;
     border-radius: 999px; cursor: pointer; background: #143d25;
@@ -145,7 +152,11 @@
       <a class="form-link" href="index.html"><i class="ti ti-send"></i> Submit Availability</a>
     </div>
 
-    <div class="month-picker" id="month-picker"></div>
+    <div class="month-nav">
+      <button class="month-arrow" id="month-prev" aria-label="Previous month"><i class="ti ti-chevron-left"></i></button>
+      <div class="month-picker" id="month-picker"></div>
+      <button class="month-arrow" id="month-next" aria-label="Next month"><i class="ti ti-chevron-right"></i></button>
+    </div>
 
     <div class="err-banner" id="err-banner">Couldn't load the roster from the sheet. Please try again shortly.</div>
     <div class="status-msg" id="status-msg"><i class="ti ti-loader"></i> Loading roster…</div>
@@ -781,6 +792,12 @@
     });
   }
 
+  // Tracks whatever month is currently loaded, so the Prev/Next arrows can
+  // step from it indefinitely -- the owner generates rosters many months
+  // ahead, so a fixed chip window alone can't reach everything.
+  let currentMonthIdx = null;
+  let currentYear = null;
+
   function buildMonthChips() {
     const now = new Date();
     const wrap = document.getElementById("month-picker");
@@ -790,21 +807,41 @@
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
       chips.push({ monthIdx: d.getMonth(), year: d.getFullYear(), label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}` });
     }
-    chips.forEach((chip, i) => {
+    chips.forEach(chip => {
       const btn = document.createElement("button");
-      btn.className = "month-chip" + (i === 1 ? " active" : ""); // i===1 is "this month"
+      btn.className = "month-chip";
       btn.textContent = chip.label;
-      btn.onclick = () => {
-        document.querySelectorAll(".month-chip").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        loadMonth(chip.label, chip.monthIdx, chip.year);
-      };
+      btn.dataset.monthIdx = chip.monthIdx;
+      btn.dataset.year = chip.year;
+      btn.onclick = () => loadMonth(chip.label, chip.monthIdx, chip.year);
       wrap.appendChild(btn);
     });
     return chips[1]; // default to "this month"
   }
 
+  // Wired up once -- steps currentMonthIdx/currentYear by one month in
+  // either direction and loads whatever's there (or the "not generated yet"
+  // message), regardless of how far that is from today.
+  function initMonthNavArrows() {
+    document.getElementById("month-prev").onclick = () => stepMonth(-1);
+    document.getElementById("month-next").onclick = () => stepMonth(1);
+  }
+
+  function stepMonth(delta) {
+    let idx = currentMonthIdx + delta;
+    let year = currentYear;
+    if (idx < 0) { idx += 12; year -= 1; }
+    if (idx > 11) { idx -= 12; year += 1; }
+    loadMonth(`${MONTHS[idx]} ${year}`, idx, year);
+  }
+
   async function loadMonth(monthLabel, monthIdx, year) {
+    document.querySelectorAll(".month-chip").forEach(b => {
+      b.classList.toggle("active", Number(b.dataset.monthIdx) === monthIdx && Number(b.dataset.year) === year);
+    });
+    currentMonthIdx = monthIdx;
+    currentYear = year;
+
     const statusMsg = document.getElementById("status-msg");
     const errBanner = document.getElementById("err-banner");
     const content = document.getElementById("content");
@@ -838,6 +875,7 @@
       currentEmailMap = buildEmailMap(availabilityRows);
       currentSwapMap = parseSwapMap(swapRows);
       initControls();
+      initMonthNavArrows();
       const defaultChip = buildMonthChips();
       await loadMonth(defaultChip.label, defaultChip.monthIdx, defaultChip.year);
     } catch (err) {
