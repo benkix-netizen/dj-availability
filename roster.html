@@ -576,6 +576,7 @@
 
   function initPromoButtons(slots, monthLabel) {
     const container = document.getElementById("promo-buttons");
+    container.innerHTML = "";
     const weeks = groupSlotsIntoWeeks(slots);
     weeks.forEach((weekNights, i) => {
       const first = weekNights[0].dateLabel;
