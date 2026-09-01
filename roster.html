@@ -510,8 +510,11 @@
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  // Same "3 nights per week" chunking generateRoster() uses server-side.
-  function groupSlotsIntoWeeks(slots) {
+  // One entry per calendar night, each with its own slots -- the raw list
+  // initPromoButtons chunks into "3 nights per week" cards (matching
+  // generateRoster()'s server-side chunking) or reads whole for the
+  // whole-month card.
+  function groupSlotsByNight(slots) {
     const byDate = [];
     const seen = {};
     slots.forEach(slot => {
@@ -522,9 +525,7 @@
       }
       byDate[seen[key]].slots.push(slot);
     });
-    const weeks = [];
-    for (let i = 0; i < byDate.length; i += 3) weeks.push(byDate.slice(i, i + 3));
-    return weeks;
+    return byDate;
   }
 
   // 1080x1920 (Instagram Story). Uses system fonts, not the Google Fonts used
@@ -574,6 +575,56 @@
     </svg>`;
   }
 
+  // Whole-month promo card: every set for every night, same time+name rows
+  // as the per-week cards -- condensed by scaling row height/fonts down as
+  // the month gets busier so it still fits the 1080x1920 frame. Unassigned
+  // slots are skipped here (public lineup card, not an ops document).
+  function buildMonthStorySvg(nights, monthLabel) {
+    const W = 1080, H = 1920;
+    const top = 400, bottom = H - 140;
+    const totalRows = nights.reduce((sum, n) => sum + Math.max(n.slots.filter(s => s.assignedDJ).length, 1), 0);
+    const rowH = Math.max(28, Math.min(62, (bottom - top) / Math.max(totalRows + nights.length * 0.88, 1)));
+    const dateSize = Math.max(20, Math.min(46, rowH * 0.74));
+    const rowSize = Math.max(15, Math.min(34, rowH * 0.52));
+
+    const lines = [];
+    let y = top;
+    nights.forEach(night => {
+      lines.push(`<text x="90" y="${y}" font-family="Georgia, serif" font-weight="700" font-size="${dateSize}" fill="#FFD700">${escapeXml(night.day)}, ${escapeXml(night.dateLabel)}</text>`);
+      y += dateSize * 0.85;
+      const assigned = night.slots.filter(s => s.assignedDJ);
+      const rows = assigned.length ? assigned.map(s => ({ time: s.setTime, name: s.assignedDJ })) : [{ time: "", name: "Lineup TBA" }];
+      rows.forEach(row => {
+        const isTba = row.name === "Lineup TBA";
+        lines.push(`<text x="90" y="${y}" font-family="Segoe UI, sans-serif" font-size="${rowSize * 0.85}" fill="#a8d4b8">${escapeXml(row.time)}</text>`);
+        lines.push(`<text x="990" y="${y}" text-anchor="end" font-family="Segoe UI, sans-serif" font-weight="700" font-size="${rowSize}" fill="${isTba ? "#5a7a68" : "#ffffff"}"${isTba ? ' font-style="italic"' : ""}>${escapeXml(row.name)}</text>`);
+        y += rowH;
+      });
+      y += rowH * 0.25;
+    });
+
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="storyBgMonth" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0a0f0c"/>
+          <stop offset="100%" stop-color="#020302"/>
+        </linearGradient>
+      </defs>
+      <rect width="${W}" height="${H}" fill="url(#storyBgMonth)"/>
+      <g stroke="#FFD700" stroke-width="3" fill="none" opacity="0.85">
+        <path d="M 50 170 V 90 Q 50 60 80 60 H 160"/>
+        <path d="M 920 60 H 1000 Q 1030 60 1030 90 V 170"/>
+        <path d="M 1030 ${H - 170} V ${H - 90} Q 1030 ${H - 60} 1000 ${H - 60} H 920"/>
+        <path d="M 160 ${H - 60} H 80 Q 50 ${H - 60} 50 ${H - 90} V ${H - 170}"/>
+      </g>
+      <text x="540" y="180" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="28" letter-spacing="6" fill="#FFD700">LKF BAR</text>
+      <text x="540" y="290" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="72" fill="#ffffff">${escapeXml(monthLabel)}</text>
+      <line x1="440" y1="340" x2="640" y2="340" stroke="#FFD700" stroke-width="2"/>
+      ${lines.join("\n      ")}
+      <text x="540" y="${H - 90}" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="24" fill="#a8d4b8">Full roster: benkix-netizen.github.io/dj-availability/roster.html</text>
+    </svg>`;
+  }
+
   function downloadStoryPng(svgString, filename) {
     const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(svgBlob);
@@ -598,7 +649,21 @@
   function initPromoButtons(slots, monthLabel) {
     const container = document.getElementById("promo-buttons");
     container.innerHTML = "";
-    const weeks = groupSlotsIntoWeeks(slots);
+    const nights = groupSlotsByNight(slots);
+
+    if (nights.length) {
+      const monthBtn = document.createElement("button");
+      monthBtn.className = "cal-btn small";
+      monthBtn.innerHTML = `<i class="ti ti-download"></i> Whole month`;
+      monthBtn.onclick = () => {
+        const svg = buildMonthStorySvg(nights, monthLabel);
+        downloadStoryPng(svg, `LKF-Bar-${slugify(monthLabel)}-whole-month.png`);
+      };
+      container.appendChild(monthBtn);
+    }
+
+    const weeks = [];
+    for (let i = 0; i < nights.length; i += 3) weeks.push(nights.slice(i, i + 3));
     weeks.forEach((weekNights, i) => {
       const first = weekNights[0].dateLabel;
       const last = weekNights[weekNights.length - 1].dateLabel;
