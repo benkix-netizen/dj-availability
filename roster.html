@@ -387,7 +387,11 @@
   // Converts a Melbourne local wall-clock time to the correct UTC Date instant (DST-aware).
   function melbourneLocalToUtc({ dayNum, monthIdx, year, hour, minute }) {
     const guess = Date.UTC(year, monthIdx, dayNum, hour, minute);
-    const offsetMin = tzOffsetMinutes(new Date(guess), TIME_ZONE);
+    // Two-pass: the first offset is sampled ~10-11h away from the real instant,
+    // which picks the wrong side of a DST change (e.g. Sat night before the
+    // first Sunday of October) -- re-sample at the corrected instant.
+    const firstPass = guess - tzOffsetMinutes(new Date(guess), TIME_ZONE) * 60000;
+    const offsetMin = tzOffsetMinutes(new Date(firstPass), TIME_ZONE);
     return new Date(guess - offsetMin * 60000);
   }
 
